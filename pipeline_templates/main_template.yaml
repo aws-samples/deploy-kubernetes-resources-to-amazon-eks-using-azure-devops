@@ -1,0 +1,219 @@
+parameters:
+- name: serviceConnectionName
+  displayName: Service Connection Name 
+  type: string
+
+- name: awsRegion
+  displayName: Default region for AWS
+  type: string
+
+- name: awsEKSClusterName
+  displayName: EKS Cluster name
+  type: string
+
+- name: awsEKSRegion
+  displayName: EKS Cluster region
+  type: string
+  default: ''
+
+- name: awsECRRegion
+  displayName: ECR region
+  type: string
+  default: ''
+
+- name: awsECRAccountId
+  displayName: Account ID where ECR Registry is located
+  type: string
+  default: ''
+
+- name: projectName
+  displayName: Name of the project, must be same as the Helm Chart name.
+  type: string
+  default: 'default'
+
+- name: imageTag
+  displayName: Image Tag related to container image for application
+  type: string
+  default: ''
+
+- name: imageName
+  displayName: Name of the container image
+  type: string
+  default: ''
+
+- name: K8sNamespace
+  displayName: K8s Namespace for deployment
+  type: string
+  default: 'default'
+
+- name: helmVersion
+  displayName: Version of Helm
+  type: string
+  default: '3.8.2'
+
+- name: helmChartVersion
+  displayName: Version number for the helm chart to be created
+  type: string
+  default: ''
+
+- name: helmChartDirPath
+  displayName: Path of the directory containing the chart to be packaged, eg webapp/charts/webapp
+  type: string
+  default: ''
+
+- name: dockerfilePath
+  displayName: Path of the Dockerfile, eg webapp/Dockerfile.
+  type: string
+  default: ''
+
+stages:
+- stage: Init
+  displayName: "Initialize pipeline"   
+  jobs:
+    - job: "validateResources"
+      displayName: "Validate Resources"
+      variables:
+      - name: awsEKSRegion
+        ${{ if eq(parameters.awsEKSRegion, '') }}:
+          value: ${{ parameters.awsRegion }}
+        ${{ else }}:
+          value: ${{ parameters.awsEKSRegion }}
+      - name: awsECRRegion
+        ${{ if eq(parameters.awsECRRegion, '') }}:
+          value: ${{ parameters.awsRegion }}
+        ${{ else }}:
+          value: ${{ parameters.awsECRRegion }}
+      - name: helmChartVersion
+        ${{ if eq(parameters.helmChartVersion, '') }}:
+          value: $(Build.BuildNumber)-helm
+        ${{ else }}:
+          value: ${{ parameters.helmChartVersion }}
+      - name: imageTag
+        ${{ if eq(parameters.imageTag, '') }}:
+          value: $(Build.BuildNumber)-image
+        ${{ else }}:
+          value: ${{ parameters.imageTag }}
+      - name: imageName
+        ${{ if eq(parameters.imageName, '') }}:
+          value: ${{ parameters.projectName }}
+        ${{ else }}:
+          value: ${{ parameters.imageName }}
+      - name: dockerfilePath
+        ${{ if eq(parameters.dockerfilePath, '') }}:
+          value: ./${{ parameters.projectName }}/Dockerfile
+        ${{ else }}:
+          value: ./${{ parameters.dockerfilePath }}
+      - name: helmChartDirPath
+        ${{ if eq(parameters.helmChartDirPath, '') }}:
+          value: ./${{ parameters.projectName }}/charts/${{ parameters.projectName }}
+        ${{ else }}:
+          value: ${{ parameters.helmChartDirPath }}
+      steps:
+        - task: AWSShellScript@1
+          displayName: Check resources - ECR & EKS
+          inputs:
+              awsCredentials: ${{ parameters.serviceConnectionName }}
+              regionName: ${{ parameters.awsRegion }}
+              failOnStandardError: true
+              scriptType: 'inline'
+              inlineScript: |
+
+                  # Current Identity
+                  aws sts get-caller-identity
+
+                  # Find current Account ID
+                  currentAccountId=$(aws sts get-caller-identity --query Account --output text)
+                  
+                  # Set ECR Account ID and create ECR Repository conditionally
+                  if [[ -z "${{ parameters.awsECRAccountId }}" ]]
+                  then
+                    # Export new variable
+                    echo "##vso[task.setvariable variable=AWSECRACCOUNTID;isOutput=true]$currentAccountId"
+                    
+                    # Check ECR Repo exists, create Repo if does not exists (Print ARN)
+                    echo "Checking if ECR Repo exists, if not found then attempt creating in AccountID - $currentAccountId and region - $(awsECRRegion)"
+                    aws ecr describe-repositories --repository-names ${{ parameters.projectName }} --region $(awsECRRegion) --registry-id $currentAccountId  --query "repositories[].repositoryArn" 2>&1 || aws ecr create-repository --repository-name ${{ parameters.projectName }} --region $(awsECRRegion) --registry-id $currentAccountId
+                  else
+                    # Export new variable
+                    echo "##vso[task.setvariable variable=AWSECRACCOUNTID;isOutput=true]${{ parameters.awsECRAccountId }}"
+                    
+                    # Check ECR Repo exists, create Repo if does not exists (Print ARN)
+                    echo "Checking if ECR Repo exists, if not found then attempt creating in ${{ parameters.awsECRAccountId }} and region - $(awsECRRegion)"
+                    aws ecr describe-repositories --repository-names ${{ parameters.projectName }} --region $(awsECRRegion) --registry-id ${{ parameters.awsECRAccountId }} --query "repositories[].repositoryArn" 2>&1 || aws ecr create-repository --repository-name ${{ parameters.projectName }}  --region $(awsECRRegion) --registry-id ${{ parameters.awsECRAccountId }}
+                  fi
+
+                  # Check if EKS Cluster is ACTIVE
+                  echo "Checking if EKS Cluster is ACTIVE"
+                  aws eks describe-cluster --query cluster.status --name ${{ parameters.awsEKSClusterName }} --region $(awsEKSRegion)
+                  
+                  # Export other variables
+                  echo "##vso[task.setvariable variable=AWSECRREGION;isOutput=true]$(awsECRRegion)"
+                  echo "##vso[task.setvariable variable=AWSEKSREGION;isOutput=true]$(awsEKSRegion)"
+                  echo "##vso[task.setvariable variable=HELMCHARTVERSION;isOutput=true]$(helmChartVersion)"
+                  echo "##vso[task.setvariable variable=IMAGETAG;isOutput=true]$(imageTag)"
+                  echo "##vso[task.setvariable variable=IMAGENAME;isOutput=true]$(imageName)"
+                  echo "##vso[task.setvariable variable=DOCKERFILEPATH;isOutput=true]$(dockerfilePath)"
+                  echo "##vso[task.setvariable variable=HELMCHARTDIRPATH;isOutput=true]$(helmChartDirPath)"
+
+          name: check
+
+- stage: CI
+  displayName: "Build Docker Image and Helm Chart"
+  dependsOn: Init
+  condition: succeeded()
+  variables: 
+  - name: awsECRAccountId
+    value: $[ stageDependencies.Init.validateResources.outputs['check.AWSECRACCOUNTID'] ]
+  - name: awsECRRegion
+    value: $[ stageDependencies.Init.validateResources.outputs['check.AWSECRREGION'] ]
+  - name: awsEKSRegion
+    value: $[ stageDependencies.Init.validateResources.outputs['check.AWSEKSREGION'] ]
+  - name: helmChartVersion
+    value: $[ stageDependencies.Init.validateResources.outputs['check.HELMCHARTVERSION'] ]
+  - name: imageTag
+    value: $[ stageDependencies.Init.validateResources.outputs['check.IMAGETAG'] ]
+  - name: imageName
+    value: $[ stageDependencies.Init.validateResources.outputs['check.IMAGENAME'] ]
+  - name: dockerfilePath
+    value: $[ stageDependencies.Init.validateResources.outputs['check.DOCKERFILEPATH'] ]
+  - name: helmChartDirPath
+    value: $[ stageDependencies.Init.validateResources.outputs['check.HELMCHARTDIRPATH'] ]
+
+  jobs:
+    - template: ./job_templates/ci_template.yaml
+      parameters:
+        awsRegion: ${{ parameters.awsRegion }}
+        awsEKSClusterName: ${{ parameters.awsEKSClusterName }}
+        serviceConnectionName: ${{ parameters.serviceConnectionName }}
+        projectName: ${{ parameters.projectName }}
+
+- stage: CD
+  displayName: "Deploy Helm Chart to EKS"
+  dependsOn: 
+  - Init
+  - CI
+  condition: succeeded()
+  variables: 
+  - name: awsECRAccountId
+    value: $[ stageDependencies.Init.validateResources.outputs['check.AWSECRACCOUNTID'] ]
+  - name: awsECRRegion
+    value: $[ stageDependencies.Init.validateResources.outputs['check.AWSECRREGION'] ]
+  - name: awsEKSRegion
+    value: $[ stageDependencies.Init.validateResources.outputs['check.AWSEKSREGION'] ]
+  - name: helmChartVersion
+    value: $[ stageDependencies.Init.validateResources.outputs['check.HELMCHARTVERSION'] ]
+  - name: imageTag
+    value: $[ stageDependencies.Init.validateResources.outputs['check.IMAGETAG'] ]
+  - name: imageName
+    value: $[ stageDependencies.Init.validateResources.outputs['check.IMAGENAME'] ]
+  - name: repositoryURI
+    value: $[ stageDependencies.CI.Build.outputs['ecr.REPOSITORY_URI'] ]
+
+  jobs:
+    - template: ./job_templates/cd_template.yaml
+      parameters:
+        awsRegion: ${{ parameters.awsRegion }}
+        awsEKSClusterName: ${{ parameters.awsEKSClusterName }}
+        serviceConnectionName: ${{ parameters.serviceConnectionName }}
+        projectName: ${{ parameters.projectName }}
+        K8sNamespace: ${{ parameters.K8sNamespace }}

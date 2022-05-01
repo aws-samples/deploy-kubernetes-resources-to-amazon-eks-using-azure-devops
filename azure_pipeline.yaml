@@ -1,0 +1,23 @@
+trigger:
+  batch: true
+  branches:
+    include: 
+    - 'master'
+  paths:
+    include: 
+    - webapp/
+    
+pr: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+#pool: self-hosted # If you are running self-hosted Azure DevOps Agents
+
+stages:
+# Refering the pipeline template, input parameter that are not specified will be added with defaults
+- template: ./pipeline_templates/main_template.yaml
+  parameters:
+    serviceConnectionName: azuredevops_service_connection
+    awsRegion: eu-west-1
+    awsEKSClusterName: sandbox
+    projectName: webapp

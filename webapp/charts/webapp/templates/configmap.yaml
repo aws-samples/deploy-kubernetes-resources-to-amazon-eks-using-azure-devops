@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: index-html-configmap
+  namespace: default
+data:
+  index.html: |
+    <head>
+    <title>My App</title>
+    </head>
+    <body>
+    <div>    
+      <div>
+        <h1>
+        Deploy Kubernetes resources to Amazon EKS using Azure DevOps</h1>
+        <h2>
+            The App Version is: {{.Values.appversion}}</h2>
+        <h3>Links</h3>
+        <ul>
+            <li>
+                <a href="https://apg-library.amazonaws.com/" target="_blank" rel="noopener">APG Library</a>
+            </li>
+        </ul>
+      </div>
+    </div>
+    </body>

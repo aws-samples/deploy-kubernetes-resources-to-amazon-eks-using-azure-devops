@@ -1,0 +1,95 @@
+jobs:
+  - job: "Build"
+    displayName: "Build: Docker Image & Helm -> ECR"
+    continueOnError: false
+    steps:
+      - task: HelmInstaller@1
+        displayName: 'Install Helm'
+        inputs:
+          helmVersionToInstall: ${{ parameters.helmVersion }}
+
+      - task: AWSShellScript@1
+        displayName: 'ECR login'
+        name: ecr
+        inputs:
+            awsCredentials: ${{ parameters.serviceConnectionName }}
+            regionName: ${{ parameters.awsRegion }}
+            failOnStandardError: true
+            scriptType: 'inline'
+            inlineScript: |
+              echo 'Using identity'
+              aws sts get-caller-identity
+              
+              ## ECR Login
+              export HELM_EXPERIMENTAL_OCI=1
+              
+              repository_uri=$(aws ecr describe-repositories\
+                --repository-names ${{ parameters.projectName }} \
+                --region $(awsECRRegion) \
+                --registry-id  $(awsECRAccountId) \
+                --query "repositories[].repositoryUri" \
+                --output text)
+              # Set output variables for Repository_URI
+              echo "##vso[task.setvariable variable=REPOSITORY_URI;isOutput=true]$repository_uri"
+
+              # Login with Docker
+              echo 'Docker Login to ECR...'
+              aws ecr get-login-password \
+              --region $(awsECRRegion) | docker login \
+              --username AWS \
+              --password-stdin $repository_uri 2>&1
+
+              # Login with Helm
+              echo 'HELM Login to ECR...'
+              aws ecr get-login-password \
+              --region $(awsECRRegion) | helm registry login \
+              --username AWS \
+              --password-stdin $(awsECRAccountId).dkr.ecr.$(awsECRRegion).amazonaws.com
+              
+      - bash: |
+          echo 'Building and tagging Docker Image...'
+          echo 'Branch is: $(build.sourceBranch)'
+          docker_ctx=$(dirname $(dockerfilePath))
+          docker build -t $(ecr.REPOSITORY_URI):$(imageTag) -f $(dockerfilePath) $docker_ctx
+        failOnStderr: true
+        displayName: 'Docker Build'
+
+      - bash: |
+          docker push $(ecr.REPOSITORY_URI):$(imageTag)
+        failOnStderr: true
+        displayName: 'Docker Push'
+
+      - bash: |
+          helm package \
+              --version $(helmChartVersion) \
+              --app-version $(imageTag) \
+              $(helmChartDirPath)
+        failOnStderr: true
+        displayName: 'Helm Package'
+
+      - task: AWSShellScript@1
+        name: helmPush
+        displayName: 'Helm Push'
+        inputs:
+            awsCredentials: ${{ parameters.serviceConnectionName }}
+            regionName: ${{ parameters.awsRegion }}
+            failOnStandardError: true
+            scriptType: 'inline'
+            inlineScript: |
+              chartPackage=$(ls ${{ parameters.projectName }}-$(helmChartVersion).tgz)
+              
+              # HELM Push
+              ## The name of your repository should match the name you use in the Helm chart.
+              ### https://docs.aws.amazon.com/AmazonECR/latest/userguide/repository-create.html
+              helm push $chartPackage oci://$(awsECRAccountId).dkr.ecr.$(awsECRRegion).amazonaws.com/
+              
+              # Output
+              aws ecr describe-images \
+                  --repository-name ${{ parameters.projectName }} \
+                  --region $(awsECRRegion) \
+                  --registry-id $(awsECRAccountId) \
+                  --query 'sort_by(imageDetails,& imagePushedAt)[*]'
+
+      - publish: $(build.artifactStagingDirectory)
+        artifact: build-artifact
+        condition: succeeded()

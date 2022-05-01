@@ -1,0 +1,99 @@
+jobs:
+  - job: "Deploy"
+    displayName: "Release: Pull Helm -> Deploy to EKS"
+    continueOnError: false
+    steps:
+      - task: HelmInstaller@1
+        displayName: 'Install Helm'
+        inputs:
+          helmVersionToInstall: ${{ parameters.helmVersion }}
+
+      - task: AWSShellScript@1
+        displayName: 'ECR login'
+        inputs:
+            awsCredentials: ${{ parameters.serviceConnectionName }}
+            regionName: ${{ parameters.awsRegion }}
+            failOnStandardError: true
+            scriptType: 'inline'
+            inlineScript: |
+              echo 'Using identity'
+              aws sts get-caller-identity
+              
+              ## ECR Login
+              export HELM_EXPERIMENTAL_OCI=1
+
+              # Login with Helm
+              echo 'HELM Login to ECR...'
+              aws ecr get-login-password \
+              --region $(awsECRRegion) | helm registry login \
+              --username AWS \
+              --password-stdin $(repositoryURI)
+
+      - task: AWSShellScript@1
+        displayName: 'Pull and deploy Helm Chart'
+        inputs:
+            awsCredentials: ${{ parameters.serviceConnectionName }}
+            regionName: ${{ parameters.awsRegion }}
+            failOnStandardError: true
+            scriptType: 'inline'
+            inlineScript: |
+                # # Confirm caller identity
+               
+                # echo 'Using identity'
+                # aws sts get-caller-identity
+                
+                # Pull Helm Chart
+                echo "Pulling helm chart from $(repositoryURI)"
+                helm pull oci://$(repositoryURI) --version $(helmChartVersion)
+
+                # Get Kubeconfig
+                echo 'Connect to Amazon EKS cluster'
+                aws eks update-kubeconfig --region $(awsEKSRegion) --name ${{ parameters.awsEKSClusterName }}
+                
+                # Deploy Helm Chart
+                echo 'Deploy Helm chart to EKS...'
+                chartPackage=${{ parameters.projectName }}-$(helmChartVersion).tgz
+                echo $(pwd)
+                echo "chart package to be installed - $chartPackage"
+                helm upgrade \
+                  --namespace ${{ parameters.K8sNamespace }} \
+                  --create-namespace \
+                  --install \
+                  --wait \
+                  --version $(helmChartVersion) \
+                  --set application.name=${{ parameters.projectName }} \
+                  --set image.repository=$(repositoryURI) \
+                  --set appversion="$(Build.BuildNumber)" \
+                  ${{ parameters.projectName }} \
+                  $chartPackage \
+
+      - task: AWSShellScript@1
+        displayName: 'Display Kubectl & Helm Outputs'
+        inputs:
+          awsCredentials: ${{ parameters.serviceConnectionName }}
+          regionName: ${{ parameters.awsRegion }}
+          scriptType: 'inline'
+          inlineScript: |
+            echo "##[section]kubectl get all -n ${{ parameters.K8sNamespace }}"
+            kubectl get all -n ${{ parameters.K8sNamespace }}
+
+            echo "##[section]kubectl get deploy -n ${{ parameters.K8sNamespace }}"
+            kubectl get deploy -n ${{ parameters.K8sNamespace }}
+
+            echo "##[section]kubectl get services -n ${{ parameters.K8sNamespace }}"
+            kubectl get services -n ${{ parameters.K8sNamespace }}
+
+            echo "##[section]kubectl get pods -n ${{ parameters.K8sNamespace }}"
+            kubectl get pods -n ${{ parameters.K8sNamespace }}
+
+            echo "##[section]kubectl describe service webapp -n ${{ parameters.K8sNamespace }}"
+            kubectl describe service webapp -n ${{ parameters.K8sNamespace }}
+
+            echo "##[section]kubectl kubectl get secrets -n ${{ parameters.K8sNamespace }}"
+            kubectl get secrets -n ${{ parameters.K8sNamespace }}
+
+            echo "##[section]helm list -n ${{ parameters.K8sNamespace }}"
+            helm list -n ${{ parameters.K8sNamespace }}
+
+            echo "##[section]helm status ${{ parameters.projectName }} -n ${{ parameters.K8sNamespace }}"
+            helm status ${{ parameters.projectName }} -n ${{ parameters.K8sNamespace }}
