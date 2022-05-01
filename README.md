@@ -2,7 +2,7 @@
 This pattern aims to provide guidance on how to deploy a containerized application to Amazon EKS cluster from Azure DevOps using Helm chart. 
 The pattern can be further extended by modifying the pipeline template shared here to use the Azure pipelines service connection for AWS in order to query and use data from AWS Cloud.
 
-# Prerequisites
+## Prerequisites
 - AWS Account
 - Amazon EKS Cluster
 - IAM user account with access to Amazon EKS Cluster
@@ -10,7 +10,7 @@ The pattern can be further extended by modifying the pipeline template shared he
 - AWS Toolkit for Azure DevOps installed in Azure DevOps or on an on-premises Azure DevOps server
 - Application to be deployed (Web App provided in this guide)
 
-# Get Started
+## Get Started
 For step by step implementation of this pattern, please visit the following link: [Deploy Kubernetes resources to Amazon EKS using Azure DevOps](https://apg-library.amazonaws.com/content-viewer/author/b63d863f-9922-41b8-86f1-55df6ddf733c)
 
 ## About the pipeline template
@@ -83,7 +83,7 @@ stages:
 | `helmChartDirPath`         | Path of the directory containing the chart to be packaged, eg webapp/charts/webapp | `./${{ parameters.projectName }}/charts/${{ parameters.projectName }}` |
 | `dockerfilePath`           | Path of the Dockerfile, eg webapp/Dockerfile.                   | `./${{ parameters.projectName }}/Dockerfile` |
 
-# Limitations
+## Limitations
 - Amazon EKS cluster is publicly available and may not suit all architectures.
 - For Private EKS cluster, please refer to Azure DevOps Self-Hosted Agents: Self-hosted Linux agents
 - To use AWS Toolkit for Azure DevOps for accessing AWS services, you need an AWS account and AWS credentials.
