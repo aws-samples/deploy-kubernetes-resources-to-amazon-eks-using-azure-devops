@@ -4,7 +4,7 @@ The pattern can be further extended by modifying the pipeline template shared he
 
 ## Prerequisites
 - AWS Account
-- Amazon EKS Cluster
+- Amazon EKS Cluster with node instance role to pull content from ECR
 - IAM user account with access to Amazon EKS Cluster
 - Azure DevOps account
 - AWS Toolkit for Azure DevOps installed in Azure DevOps or on an on-premises Azure DevOps server
