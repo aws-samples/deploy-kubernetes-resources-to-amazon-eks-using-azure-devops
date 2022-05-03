@@ -56,7 +56,7 @@ jobs:
                 echo $(pwd)
                 echo "chart package to be installed - $chartPackage"
                 helm upgrade \
-                  --namespace ${{ parameters.K8sNamespace }} \
+                  --namespace $(K8sNamespace) \
                   --create-namespace \
                   --install \
                   --wait \
@@ -74,26 +74,26 @@ jobs:
           regionName: ${{ parameters.awsRegion }}
           scriptType: 'inline'
           inlineScript: |
-            echo "##[section]kubectl get all -n ${{ parameters.K8sNamespace }}"
-            kubectl get all -n ${{ parameters.K8sNamespace }}
+            echo "##[section]kubectl get all -n $(K8sNamespace)"
+            kubectl get all -n $(K8sNamespace)
 
-            echo "##[section]kubectl get deploy -n ${{ parameters.K8sNamespace }}"
-            kubectl get deploy -n ${{ parameters.K8sNamespace }}
+            echo "##[section]kubectl get deploy -n $(K8sNamespace)"
+            kubectl get deploy -n $(K8sNamespace)
 
-            echo "##[section]kubectl get services -n ${{ parameters.K8sNamespace }}"
-            kubectl get services -n ${{ parameters.K8sNamespace }}
+            echo "##[section]kubectl get services -n $(K8sNamespace)"
+            kubectl get services -n $(K8sNamespace)
 
-            echo "##[section]kubectl get pods -n ${{ parameters.K8sNamespace }}"
-            kubectl get pods -n ${{ parameters.K8sNamespace }}
+            echo "##[section]kubectl get pods -n $(K8sNamespace)"
+            kubectl get pods -n $(K8sNamespace)
 
-            echo "##[section]kubectl describe service webapp -n ${{ parameters.K8sNamespace }}"
-            kubectl describe service webapp -n ${{ parameters.K8sNamespace }}
+            echo "##[section]kubectl describe service webapp -n $(K8sNamespace)"
+            kubectl describe service webapp -n $(K8sNamespace)
 
-            echo "##[section]kubectl kubectl get secrets -n ${{ parameters.K8sNamespace }}"
-            kubectl get secrets -n ${{ parameters.K8sNamespace }}
+            echo "##[section]kubectl kubectl get secrets -n $(K8sNamespace)"
+            kubectl get secrets -n $(K8sNamespace)
 
-            echo "##[section]helm list -n ${{ parameters.K8sNamespace }}"
-            helm list -n ${{ parameters.K8sNamespace }}
+            echo "##[section]helm list -n $(K8sNamespace)"
+            helm list -n $(K8sNamespace)
 
-            echo "##[section]helm status ${{ parameters.projectName }} -n ${{ parameters.K8sNamespace }}"
-            helm status ${{ parameters.projectName }} -n ${{ parameters.K8sNamespace }}
+            echo "##[section]helm status ${{ parameters.projectName }} -n $(K8sNamespace)"
+            helm status ${{ parameters.projectName }} -n $(K8sNamespace)
