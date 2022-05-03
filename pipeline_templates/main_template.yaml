@@ -44,7 +44,7 @@ parameters:
 - name: K8sNamespace
   displayName: K8s Namespace for deployment
   type: string
-  default: 'default'
+  default: ''
 
 - name: helmVersion
   displayName: Version of Helm
@@ -98,6 +98,11 @@ stages:
           value: ${{ parameters.projectName }}
         ${{ else }}:
           value: ${{ parameters.imageName }}
+      - name: K8sNamespace
+        ${{ if eq(parameters.K8sNamespace, '') }}:
+          value: ${{ parameters.projectName }}
+        ${{ else }}:
+          value: ${{ parameters.K8sNamespace }}
       - name: dockerfilePath
         ${{ if eq(parameters.dockerfilePath, '') }}:
           value: ./${{ parameters.projectName }}/Dockerfile
@@ -152,6 +157,7 @@ stages:
                   echo "##vso[task.setvariable variable=HELMCHARTVERSION;isOutput=true]$(helmChartVersion)"
                   echo "##vso[task.setvariable variable=IMAGETAG;isOutput=true]$(imageTag)"
                   echo "##vso[task.setvariable variable=IMAGENAME;isOutput=true]$(imageName)"
+                  echo "##vso[task.setvariable variable=K8SNAMESPACE;isOutput=true]$(K8sNamespace)"
                   echo "##vso[task.setvariable variable=DOCKERFILEPATH;isOutput=true]$(dockerfilePath)"
                   echo "##vso[task.setvariable variable=HELMCHARTDIRPATH;isOutput=true]$(helmChartDirPath)"
 
@@ -206,6 +212,8 @@ stages:
     value: $[ stageDependencies.Init.validateResources.outputs['check.IMAGETAG'] ]
   - name: imageName
     value: $[ stageDependencies.Init.validateResources.outputs['check.IMAGENAME'] ]
+  - name: K8sNamespace
+    value: $[ stageDependencies.Init.validateResources.outputs['check.K8SNAMESPACE'] ]
   - name: repositoryURI
     value: $[ stageDependencies.CI.Build.outputs['ecr.REPOSITORY_URI'] ]
 
@@ -216,4 +224,3 @@ stages:
         awsEKSClusterName: ${{ parameters.awsEKSClusterName }}
         serviceConnectionName: ${{ parameters.serviceConnectionName }}
         projectName: ${{ parameters.projectName }}
-        K8sNamespace: ${{ parameters.K8sNamespace }}
