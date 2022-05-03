@@ -4,15 +4,16 @@ The pattern can be further extended by modifying the pipeline template shared he
 
 ## Prerequisites
 - AWS Account
-- Amazon EKS Cluster
+- Amazon EKS Cluster with node instance role to pull content from ECR
 - IAM user account with access to Amazon EKS Cluster
 - Azure DevOps account
 - AWS Toolkit for Azure DevOps installed in Azure DevOps or on an on-premises Azure DevOps server
-- Application to be deployed (Web App provided in this guide)
+- Application to be deployed (A sample web app provided in this guide)
 
 ## Get Started
-For step by step implementation of this pattern, please visit the following link: [Deploy Kubernetes resources to Amazon EKS using Azure DevOps](https://apg-library.amazonaws.com/content-viewer/author/b63d863f-9922-41b8-86f1-55df6ddf733c)
 
+## Target Architecture
+![Target Architecture](./docs/img/Architecture.png "Target Architecture")
 ## About the pipeline template
 The pipline template composes of 3 templates:
 
@@ -47,22 +48,34 @@ pipeline_templates/
 ├─ main_template.yaml
 ```
 
-## Using the pipeline template
-The pipeline has its own series of stages, so you may refer to the pipeline template at a similar level. 
+## How to setup the pipeline template
+To use the pipeline template, follow this procedure:
+1. **Copy the following contents from this repo to your own Azure DevOps repo**
+    * Copy the pipeline templates folder as-is
+        - [pipeline_templates](./pipeline_templates/) folder (including contents in sub-folders)
+    * Copy the sample pipeline that refers the pipeline template
+        - [azure_pipeline.yaml](./azure_pipeline.yaml) file
+    
+    Here is an example to show the usage - [azure_pipeline.yaml](./azure_pipeline.yaml)
+2. **Setup a New pipeline in your Azure DevOps**
+    * Go to Pipelines, and then select New pipeline.
+    * Do the steps of the wizard by first selecting Azure repos git (YAML) as the location of your source code.
+    * When you see the list of repositories, select your repository.
+    * Select Existing Azure pipelines YAML file in the configure your pipeline section
+    * Select the branch as master or main and the path as: /azure_pipeline.yaml. Click on the continue button
+    * Replace the input parameter values for the mandatory fields in azure_pipeline.yaml to your needs:
+        ```
+        serviceConnectionName: Azure DevOps Service Connection name.
+        awsRegion: Default region for AWS.
+        awsEKSClusterName: Name of the Amazon EKS Cluster used for deployment.
+        projectName: Name of the project. This should be same as the Helm chart name
+        ```
+    * Click on the dropdown menu beside the Run button and save the pipeline
+3. **Run the pipeline**
+    * Go to Pipelines, and then select the pipeline you just created
+    * Click on the Run pipeline button
+    * Click on the Run button
 
-Here is an example to showcase the usage - [azure_pipeline.yaml](./azure_pipeline.yaml)
-
-```
-# Refer the pipeline template from your own pipeline as below
-
-stages:
-- template: ./pipeline_templates/main_template.yaml
-  parameters:
-    serviceConnectionName: avm1
-    awsRegion: eu-north-1
-    awsEKSClusterName: proservese-cluster-1
-    projectName: webapp
-```
 ## Pipeline template parameters
 ### Input parameters
 
@@ -85,8 +98,9 @@ stages:
 
 ## Limitations
 - Amazon EKS cluster is publicly available and may not suit all architectures.
-- For Private EKS cluster, please refer to Azure DevOps Self-Hosted Agents: Self-hosted Linux agents
+    - For Private EKS cluster, please refer to Azure DevOps Self-Hosted Agents: Self-hosted Linux agents
 - To use AWS Toolkit for Azure DevOps for accessing AWS services, you need an AWS account and AWS credentials.
+- [Sample web app](./webapp/charts/README.md) provided as a part of this pattern is **only for example purpose**. It is a web server (httpd), hosting a HTML file (index.html). The application is exposed via public load balancer with a Kubernetes service of type `Loadbalancer` over **HTTP**.
 
 ## Security
 
@@ -94,5 +108,4 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 
 ## License
 
-This library is licensed under the MIT-0 License. See the LICENSE file.
-
+This library is licensed under the MIT-0 License. See the [LICENSE](./LICENSE) file.
