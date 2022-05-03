@@ -74,12 +74,12 @@ stages:
 | `awsEKSRegion`             | Region for EKS Cluster                                          | `${{ parameters.awsRegion }}` |
 | `awsECRRegion`             | Region for ECR repository                                       | `${{ parameters.awsRegion }}` |
 | `awsECRAccountId`          | Account ID where ECR Repository is created                      | `AccountID of Service Connection` |
-| `projectName`              | Name of the project. Used in naming of K8s resources & Helm Chart  | `"default"` |
-| `K8sNamespace`             | K8s Namespace for deployment                                    | `"default"` |
+| `projectName`              | Name of the project. Used in naming of K8s resources & Helm Chart  | `"webapp"` |
+| `K8sNamespace`             | K8s Namespace for deployment                                    | `${{ parameters.projectName }}` |
 | `helmVersion`              | Version of Helm                                                 | `"3.8.2"` |
 | `imageName`                | Name of the container image                                     | `${{ parameters.projectName }}` |
-| `imageTag`                 | Image Tag for the container image to be generated               | `"$(Build.BuildNumber)-image"` |
-| `helmChartVersion`         | Version number for the helm chart to be created                 | `"$(Build.BuildNumber)-helm"`  |
+| `imageTag`                 | Image Tag for the container image to be generated               | `$(Build.BuildNumber)-image` |
+| `helmChartVersion`         | Version number for the helm chart to be created                 | `$(Build.BuildNumber)-helm`  |
 | `helmChartDirPath`         | Path of the directory containing the chart to be packaged, eg webapp/charts/webapp | `./${{ parameters.projectName }}/charts/${{ parameters.projectName }}` |
 | `dockerfilePath`           | Path of the Dockerfile, eg webapp/Dockerfile.                   | `./${{ parameters.projectName }}/Dockerfile` |
 
