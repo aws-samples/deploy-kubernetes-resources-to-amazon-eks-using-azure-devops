@@ -48,7 +48,7 @@ pipeline_templates/
 ├─ main_template.yaml
 ```
 
-## How to use the pipeline template
+## How to setup the pipeline template
 To use the pipeline template, follow this procedure:
 1. **Copy the following contents from this repo to your own Azure DevOps repo**
     * Copy the pipeline templates folder as-is
