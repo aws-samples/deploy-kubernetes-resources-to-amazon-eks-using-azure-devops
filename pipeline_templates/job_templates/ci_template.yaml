@@ -44,7 +44,7 @@ jobs:
               aws ecr get-login-password \
               --region $(awsECRRegion) | helm registry login \
               --username AWS \
-              --password-stdin $(awsECRAccountId).dkr.ecr.$(awsECRRegion).amazonaws.com
+              --password-stdin $(awsECRAccountId).dkr.ecr.$(awsECRRegion).amazonaws.com 2>&1
               
       - bash: |
           echo 'Building and tagging Docker Image...'

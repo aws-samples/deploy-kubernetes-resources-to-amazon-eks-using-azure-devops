@@ -27,7 +27,7 @@ jobs:
               aws ecr get-login-password \
               --region $(awsECRRegion) | helm registry login \
               --username AWS \
-              --password-stdin $(repositoryURI)
+              --password-stdin $(repositoryURI) 2>&1
 
       - task: AWSShellScript@1
         displayName: 'Pull and deploy Helm Chart'
