@@ -115,6 +115,7 @@ stages:
           value: ${{ parameters.helmChartDirPath }}
       steps:
         - task: AWSShellScript@1
+          name: check
           displayName: Check resources - ECR & EKS
           inputs:
               awsCredentials: ${{ parameters.serviceConnectionName }}
@@ -160,8 +161,6 @@ stages:
                   echo "##vso[task.setvariable variable=K8SNAMESPACE;isOutput=true]$(K8sNamespace)"
                   echo "##vso[task.setvariable variable=DOCKERFILEPATH;isOutput=true]$(dockerfilePath)"
                   echo "##vso[task.setvariable variable=HELMCHARTDIRPATH;isOutput=true]$(helmChartDirPath)"
-
-          name: check
 
 - stage: CI
   displayName: "Build Docker Image and Helm Chart"

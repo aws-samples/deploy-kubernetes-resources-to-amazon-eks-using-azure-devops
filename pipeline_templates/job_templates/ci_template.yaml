@@ -17,40 +17,69 @@ jobs:
             failOnStandardError: true
             scriptType: 'inline'
             inlineScript: |
-              echo 'Using identity'
+              echo "Service Connection Name: ${{ parameters.serviceConnectionName }}"
+              echo "AWS Region: ${{ parameters.awsRegion }}"
+              echo "Project Name: ${{ parameters.projectName }}"
+              echo "AWS ECR Account ID: $(awsECRAccountId)"
+
+              echo 'Step 1: Using identity'
               aws sts get-caller-identity
-              
-              ## ECR Login
+
+              echo 'Step 3: Setting HELM_EXPERIMENTAL_OCI to 1'
               export HELM_EXPERIMENTAL_OCI=1
-              
-              repository_uri=$(aws ecr describe-repositories\
+
+              echo 'Step 4: Fetching repository URI'
+              repository_uri=$(aws ecr describe-repositories \
                 --repository-names ${{ parameters.projectName }} \
-                --region $(awsECRRegion) \
-                --registry-id  $(awsECRAccountId) \
+                --region ${{ parameters.awsRegion }} \
+                --registry-id $(awsECRAccountId) \
                 --query "repositories[].repositoryUri" \
                 --output text)
+              
+              if [ -z "$repository_uri" ]; then
+                echo "Error: Repository URI is empty"
+                exit 1
+              fi
+
+              echo "Repository URI: $repository_uri"
+              
               # Set output variables for Repository_URI
               echo "##vso[task.setvariable variable=REPOSITORY_URI;isOutput=true]$repository_uri"
 
-              # Login with Docker
-              echo 'Docker Login to ECR...'
+              echo 'Step 5: Docker Login to ECR'
               aws ecr get-login-password \
-              --region $(awsECRRegion) | docker login \
-              --username AWS \
-              --password-stdin $repository_uri 2>&1
-
-              # Login with Helm
-              echo 'HELM Login to ECR...'
-              aws ecr get-login-password \
-              --region $(awsECRRegion) | helm registry login \
-              --username AWS \
-              --password-stdin $(awsECRAccountId).dkr.ecr.$(awsECRRegion).amazonaws.com
+                --region ${{ parameters.awsRegion }} | docker login \
+                --username AWS \
+                --password-stdin $repository_uri 2>&1
               
+              if [ $? -ne 0 ]; then
+                echo "Error: Docker login failed"
+                exit 1
+              fi
+
+              echo 'Step 6: HELM Login to ECR'
+              aws ecr get-login-password \
+                --region ${{ parameters.awsRegion }} | helm registry login \
+                --username AWS \
+                --password-stdin $(awsECRAccountId).dkr.ecr.${{ parameters.awsRegion }}.amazonaws.com 2>&1
+
+              if [ $? -ne 0 ]; then
+                echo "Error: HELM login failed"
+                exit 1
+              fi
+
+              echo 'All steps completed successfully'
+                      
       - bash: |
           echo 'Building and tagging Docker Image...'
-          echo 'Branch is: $(build.sourceBranch)'
+          echo 'Branch is: $(Build.SourceBranch)'
+          echo "Dockerfile path: $(dockerfilePath)"
+          echo "Docker context: $(dirname $(dockerfilePath))"
           docker_ctx=$(dirname $(dockerfilePath))
-          docker build -t $(ecr.REPOSITORY_URI):$(imageTag) -f $(dockerfilePath) $docker_ctx
+
+          # Build Docker Image
+          docker build --quiet -t $(ecr.REPOSITORY_URI):$(imageTag) -f $(dockerfilePath) $docker_ctx
+
         failOnStderr: true
         displayName: 'Docker Build'
 
@@ -76,19 +105,42 @@ jobs:
             failOnStandardError: true
             scriptType: 'inline'
             inlineScript: |
-              chartPackage=$(ls ${{ parameters.projectName }}-$(helmChartVersion).tgz)
-              
-              # HELM Push
-              ## The name of your repository should match the name you use in the Helm chart.
-              ### https://docs.aws.amazon.com/AmazonECR/latest/userguide/repository-create.html
-              helm push $chartPackage oci://$(awsECRAccountId).dkr.ecr.$(awsECRRegion).amazonaws.com/
-              
-              # Output
-              aws ecr describe-images \
+              # Ensure Helm OCI support is enabled
+              export HELM_EXPERIMENTAL_OCI=1
+
+              # Find and verify the chart package
+              chartPackage=$(ls ${{ parameters.projectName }}-$(helmChartVersion).tgz 2>/dev/null)
+
+              if [ -z "$chartPackage" ]; then
+                echo "Error: Chart package file not found for version $(helmChartVersion)" >&2
+                exit 1
+              fi
+
+              echo "Chart Package: $chartPackage"
+
+              # Helm Push
+              helm_push_output=$(helm push $chartPackage oci://$(awsECRAccountId).dkr.ecr.$(awsECRRegion).amazonaws.com/ 2>&1)
+              helm_push_exit_code=$?
+              echo "$helm_push_output"
+
+              if [ $helm_push_exit_code -ne 0 ]; then
+                echo "Error: Helm push failed" >&2
+                exit 1
+              fi
+
+              # Output images in ECR repository
+              aws_ecr_output=$(aws ecr describe-images \
                   --repository-name ${{ parameters.projectName }} \
                   --region $(awsECRRegion) \
                   --registry-id $(awsECRAccountId) \
-                  --query 'sort_by(imageDetails,& imagePushedAt)[*]'
+                  --query 'sort_by(imageDetails,& imagePushedAt)[*]' 2>&1)
+              aws_ecr_exit_code=$?
+              echo "$aws_ecr_output"
+
+              if [ $aws_ecr_exit_code -ne 0 ]; then
+                echo "Error: AWS ECR describe-images command failed" >&2
+                exit 1
+              fi
 
       - publish: $(build.artifactStagingDirectory)
         artifact: build-artifact

@@ -27,7 +27,7 @@ jobs:
               aws ecr get-login-password \
               --region $(awsECRRegion) | helm registry login \
               --username AWS \
-              --password-stdin $(repositoryURI)
+              --password-stdin $(repositoryURI) 2>&1
 
       - task: AWSShellScript@1
         displayName: 'Pull and deploy Helm Chart'
@@ -37,35 +37,64 @@ jobs:
             failOnStandardError: true
             scriptType: 'inline'
             inlineScript: |
-                # # Confirm caller identity
-               
-                # echo 'Using identity'
-                # aws sts get-caller-identity
-                
-                # Pull Helm Chart
-                echo "Pulling helm chart from $(repositoryURI)"
-                helm pull oci://$(repositoryURI) --version $(helmChartVersion)
+              # Confirm caller identity
+              echo 'Using identity'
+              identity_output=$(aws sts get-caller-identity 2>&1)
+              identity_exit_code=$?
+              echo "$identity_output"
 
-                # Get Kubeconfig
-                echo 'Connect to Amazon EKS cluster'
-                aws eks update-kubeconfig --region $(awsEKSRegion) --name ${{ parameters.awsEKSClusterName }}
-                
-                # Deploy Helm Chart
-                echo 'Deploy Helm chart to EKS...'
-                chartPackage=${{ parameters.projectName }}-$(helmChartVersion).tgz
-                echo $(pwd)
-                echo "chart package to be installed - $chartPackage"
-                helm upgrade \
-                  --namespace $(K8sNamespace) \
-                  --create-namespace \
-                  --install \
-                  --wait \
-                  --version $(helmChartVersion) \
-                  --set application.name=${{ parameters.projectName }} \
-                  --set image.repository=$(repositoryURI) \
-                  --set appversion="$(Build.BuildNumber)" \
-                  ${{ parameters.projectName }} \
-                  $chartPackage \
+              if [ $identity_exit_code -ne 0 ]; then
+                echo "Error: Failed to confirm identity" >&2
+                exit 1
+              fi
+
+              # Pull Helm Chart
+              echo "Pulling helm chart from $(repositoryURI)"
+              helm_pull_output=$(helm pull oci://$(repositoryURI) --version $(helmChartVersion) 2>&1)
+              helm_pull_exit_code=$?
+              echo "$helm_pull_output"
+
+              if [ $helm_pull_exit_code -ne 0 ]; then
+                echo "Error: Failed to pull Helm chart" >&2
+                exit 1
+              fi
+
+              # Get Kubeconfig
+              echo 'Connect to Amazon EKS cluster'
+              kubeconfig_output=$(aws eks update-kubeconfig --region $(awsEKSRegion) --name ${{ parameters.awsEKSClusterName }} 2>&1)
+              kubeconfig_exit_code=$?
+              echo "$kubeconfig_output"
+
+              if [ $kubeconfig_exit_code -ne 0 ]; then
+                echo "Error: Failed to update kubeconfig" >&2
+                exit 1
+              fi
+
+              # Deploy Helm Chart
+              echo 'Deploying Helm chart to EKS...'
+              chartPackage=${{ parameters.projectName }}-$(helmChartVersion).tgz
+              echo "Current directory: $(pwd)"
+              echo "Chart package to be installed: $chartPackage"
+              
+              helm_upgrade_output=$(helm upgrade \
+                --namespace $(K8sNamespace) \
+                --create-namespace \
+                --install \
+                --wait \
+                --version $(helmChartVersion) \
+                --set application.name=${{ parameters.projectName }} \
+                --set image.repository=$(repositoryURI) \
+                --set appversion="$(Build.BuildNumber)" \
+                --kubeconfig ~/.kube/config \
+                ${{ parameters.projectName }} \
+                $chartPackage 2>&1)
+              helm_upgrade_exit_code=$?
+              echo "$helm_upgrade_output"
+
+              if [ $helm_upgrade_exit_code -ne 0 ]; then
+                echo "Error: Helm upgrade failed" >&2
+                exit 1
+              fi
 
       - task: AWSShellScript@1
         displayName: 'Display Kubectl & Helm Outputs'
